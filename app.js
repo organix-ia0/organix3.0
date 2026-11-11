@@ -45,7 +45,7 @@ const ulRo=(a,c='')=>a.length?`<ul class="lista ro ${c}">${a.join('')}</ul>`:'';
 /* ===== ASSISTENTE IA: configuração =====
    IA_ENDPOINT: endereço do seu Worker (veja o LEIA-ME). Vazio = modo demonstração (respostas prontas).
    IA_LIMITE: mensagens por dia em cada plano. */
-const IA_ENDPOINT='';
+const IA_ENDPOINT='https://organix-gemini.organix360.workers.dev';
 const IA_LIMITE={gratuito:5,premium:30};
 const iaLimite=()=>P()?IA_LIMITE.premium:IA_LIMITE.gratuito;
 const iaUsadas=()=>{const u=load('ia_uso',{});return u&&u.d===hoje()?u.n:0};
