@@ -1,0 +1,68 @@
+<!DOCTYPE html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="style.css"><title>Assistente IA | Organix AI</title>
+<body data-app><div class="app"><aside id="menu"></aside><main><h1>Assistente IA</h1>
+<p class="mut" style="margin:-10px 0 18px;max-width:62ch">Converse com o Organix AI para organizar estudos, prazos, hábitos e a sua rotina. Disponível em todos os planos, com um limite de mensagens por dia.</p>
+<div class="ia-card">
+<div class="ia-topo"><div class="ia-id"><span class="ia-avatar" aria-hidden="true">✦</span><div><b>Organix AI</b><span class="mut" id="iaModo"></span></div></div>
+<div class="ia-uso"><span id="iaUsoTxt"></span><div class="ia-med"><div id="iaMed"></div></div></div></div>
+<div class="ia-chat" id="chat" role="log" aria-live="polite"></div>
+<div class="ia-sug" id="sug"></div>
+<div class="ia-fim" id="fim" hidden></div>
+<form class="ia-form" id="f"><input id="q" maxlength="500" placeholder="Escreva sua pergunta" autocomplete="off" aria-label="Sua pergunta"><button class="btn verde" id="env">Enviar</button></form>
+<div class="ia-rodape"><span class="mini">O assistente pode errar. Não envie senhas nem dados sensíveis.</span><button type="button" class="btn peq" id="limpa">Limpar conversa</button></div>
+</div></main></div><script src="app.js"></script><script>
+(()=>{
+const MAX=20;
+let H=load('ia_chat',[]);if(!Array.isArray(H))H=[];
+const chat=$('#chat'),env=$('#env'),q=$('#q');
+const SUG=['Como organizo meus estudos esta semana?','Estou procrastinando, e agora?','Monte uma rotina simples para amanhã','Como não perder um prazo de entrega?'];
+const DEMO=[
+[/procrastin|adiar|sem foco|distra|foco/,'Comece pequeno: escolha UMA tarefa importante, silencie o celular e use um bloco de foco de 25 minutos. Quando terminar, descanse 5 minutos e repita. Começar é a parte mais difícil, então não espere ter vontade.'],
+[/estud|prova|faculdade|provas/,'Divida a matéria em partes pequenas e distribua pelos dias da semana, com um bloco de estudo fixo por dia (por exemplo, às 9h). Revise no fim do dia o que estudou e deixe um dia livre para recuperar o que atrasou.'],
+[/entrega|prazo|trabalho|artigo|relat/,'Cadastre o trabalho na Agenda de entregas com a data final e quebre em etapas com datas menores. Atualize o progresso a cada avanço: ver o que já foi feito ajuda a não deixar tudo para a última hora.'],
+[/dinheiro|gast|financ|orçamento|economi/,'Registre todos os gastos por alguns dias na seção Finanças. Depois, separe o que é essencial do que é opcional e defina um valor máximo para o mês. Ver para onde o dinheiro vai já muda muita coisa.'],
+[/aliment|água|agua|comer|refei/,'Tente manter horários regulares para as refeições e deixe uma garrafa de água sempre à vista. Defina uma meta diária de água na seção Alimentação e acompanhe ao longo do dia.'],
+[/trein|academia|exerc|corpo/,'Comece com um treino leve e constante, em dias fixos da semana, em vez de um plano pesado que você abandona. Monte as pastas de treino na seção Academia e marque o que fez para manter a sequência.'],
+[/rotina|organiz|amanh|plano|dia/,'Uma rotina simples para amanhã: 1) acorde no mesmo horário; 2) faça um bloco de estudo pela manhã; 3) um bloco de trabalho focado à tarde; 4) um treino leve; 5) um tempo para você à noite. Cadastre no Meu dia e marque o que concluir.']];
+const PADRAO='Posso ajudar com rotina, estudos, prazos, hábitos, finanças básicas, alimentação e treino. Conte um pouco mais sobre o que você quer organizar e eu sugiro um primeiro passo.';
+const demo=t=>{const x=t.toLowerCase();for(const [re,r] of DEMO)if(re.test(x))return r;return PADRAO};
+const espera=ms=>new Promise(r=>setTimeout(r,ms));
+function bolha(papel,txt){const d=document.createElement('div');d.className='ia-msg '+(papel==='user'?'eu':'ia');
+  if(papel!=='user'){const s=document.createElement('small');s.textContent='Organix AI';d.append(s)}
+  const p=document.createElement('div');p.className='ia-txt';p.textContent=txt;d.append(p);chat.append(d);chat.scrollTop=chat.scrollHeight;return p}
+function painel(){
+  const lim=iaLimite(),res=iaRestantes();
+  $('#iaUsoTxt').textContent=`${res} de ${lim} mensagens hoje`;$('#iaMed').style.width=Math.round(res/lim*100)+'%';
+  $('#iaModo').textContent=IA_ENDPOINT?'Assistente de rotina':'Modo demonstração: respostas prontas';
+  const fim=$('#fim');
+  if(res<1){fim.hidden=false;fim.innerHTML=P()?'<span>Você usou as mensagens de hoje. Elas voltam amanhã.</span>':`<span>Você usou as ${IA_LIMITE.gratuito} mensagens grátis de hoje. Com o Premium são ${IA_LIMITE.premium} por dia.</span><a class="btn rosa peq" href="pagamento.html">Assinar Premium</a>`;q.disabled=true;env.disabled=true}
+  else{fim.hidden=true;q.disabled=false;env.disabled=false}
+}
+async function chamar(){
+  const msgs=H.slice(-6);while(msgs.length&&msgs[0].role!=='user')msgs.shift();
+  const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),25000);
+  try{const r=await fetch(IA_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mensagens:msgs}),signal:ctl.signal});
+    const j=await r.json();if(!r.ok||!j.resposta)throw new Error('falha');return j.resposta}
+  finally{clearTimeout(tm)}
+}
+async function enviar(t){
+  t=t.trim();if(!t||iaRestantes()<1||env.disabled)return;
+  $('#sug').hidden=true;bolha('user',t);H.push({role:'user',content:t});
+  const p=bolha('assistant','Pensando…');p.parentNode.classList.add('pensando');env.disabled=true;
+  let r=null;
+  try{r=IA_ENDPOINT?await chamar():(await espera(700),demo(t))}catch(e){r=null}
+  p.parentNode.classList.remove('pensando');
+  if(r){H.push({role:'assistant',content:r});iaConta()}else{r='Não consegui responder agora. Tente de novo em instantes.';H.pop()}
+  p.textContent=r;H=H.slice(-MAX);save('ia_chat',H);painel();chat.scrollTop=chat.scrollHeight;
+}
+function inicio(){
+  chat.innerHTML='';bolha('assistant','Oi! Eu sou o Organix AI. Posso ajudar a organizar seus estudos, prazos, hábitos e a sua rotina. Sobre o que você quer falar?');
+  H.forEach(m=>bolha(m.role,m.content));
+  $('#sug').innerHTML=SUG.map(t=>`<button type="button">${esc(t)}</button>`).join('');$('#sug').hidden=H.length>0;
+}
+$('#sug').onclick=e=>{const b=e.target.closest('button');if(b)enviar(b.textContent)};
+$('#f').onsubmit=e=>{e.preventDefault();const v=q.value;q.value='';enviar(v)};
+$('#limpa').onclick=async()=>{if(await ask('Limpar a conversa? O seu limite de mensagens de hoje não é reiniciado.','Limpar','Cancelar')){H=[];save('ia_chat',H);inicio()}};
+inicio();painel();
+const pre=sessionStorage.getItem('ia_pergunta');if(pre){sessionStorage.removeItem('ia_pergunta');enviar(pre)}
+})();
+</script>
